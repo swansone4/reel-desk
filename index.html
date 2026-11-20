@@ -1,0 +1,1064 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer"><title>Reel Desk</title>
+<!-- The Reel Desk's online copy (reelkit/desk_pages.py). Everything in site.bin and m/ is AES-256-GCM encrypted; this
+     page derives the key from the passphrase (PBKDF2-SHA256) and opens it in the browser. Nothing readable is on the server. -->
+<style>
+/* The online copy's own look: the desk's CRT terminal (reelkit/desk.py CSS, sent in site.bin, styles the pages once it's
+   open). This covers what shows before and around them: the lock screen, dialogs, the viewer and the recorder. The fonts
+   are bundled next to this page (fonts/, both OFL), so nothing loads from Google. */
+@font-face{font-family:"JetBrains Mono";src:url(fonts/JetBrainsMono-Variable.woff2) format("woff2");font-weight:100 800;font-display:swap}
+@font-face{font-family:"IBM Plex Mono";src:url(fonts/IBMPlexMono-Regular.woff2) format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:"IBM Plex Mono";src:url(fonts/IBMPlexMono-Bold.woff2) format("woff2");font-weight:700;font-display:swap}
+:root{color-scheme:dark;--g:#39ff7a;--g2:#2bbf5c;--g3:#1c7a3c;--sage:#6f9a78;--text:#94b99b;--hi:#dcf7e3;--amber:#ffd24a;--red:#ff6b5e;
+--line:rgba(57,255,122,.14);--line2:rgba(57,255,122,.3);--glow:0 0 6px rgba(57,255,122,.5),0 0 16px rgba(57,255,122,.16);
+--mono:"JetBrains Mono","IBM Plex Mono",ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace;
+--body:"IBM Plex Mono","JetBrains Mono",ui-monospace,"Cascadia Mono",Consolas,Menlo,monospace}
+html{background:#000}
+body{margin:0;background:transparent;font:14px/1.6 var(--body);color:var(--text);-webkit-text-size-adjust:100%}
+body:before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+background:radial-gradient(70vmax 45vmax at 12% -8%,rgba(57,255,122,.1),transparent 62%),
+radial-gradient(60vmax 40vmax at 100% 108%,rgba(57,255,122,.07),transparent 60%),#000}
+body:after{content:"";position:fixed;inset:0;z-index:7;pointer-events:none;
+background:repeating-linear-gradient(180deg,rgba(0,0,0,0) 0 2px,rgba(0,0,0,.16) 2px 3px)}
+::selection{background:var(--g);color:#000}
+button,input,textarea{font-family:var(--mono)}
+button{display:inline-block;font:600 13px/1.25 var(--mono);color:var(--g);background:rgba(57,255,122,.06);border:1px solid var(--g2);
+border-radius:3px;padding:8px 14px;cursor:pointer;-webkit-appearance:none;appearance:none}
+button:hover{background:var(--g);color:#000;border-color:var(--g);box-shadow:0 0 14px rgba(57,255,122,.45)}
+button:disabled{opacity:.42;cursor:default;background:transparent;color:var(--g2);box-shadow:none}
+input[type=checkbox],input[type=range]{accent-color:var(--g)}
+.tb{display:flex;align-items:center;gap:10px;padding:9px 14px;background:#06140b;border-bottom:1px solid var(--line2);font:500 13px var(--mono);color:var(--sage)}
+.tb:before{content:"";flex:none;width:11px;height:11px;border-radius:50%;background:#ff5f57;box-shadow:17px 0 0 var(--amber),34px 0 0 var(--g);margin-right:36px}
+.tb b{color:var(--g);font-weight:600;text-shadow:var(--glow)}
+#lock{max-width:440px;margin:12vh auto 24px;border:1px solid var(--line2);border-radius:10px;overflow:hidden;
+background:linear-gradient(rgba(5,16,9,.95),rgba(2,8,4,.97));box-shadow:0 0 0 1px #000,0 0 46px rgba(57,255,122,.09)}
+#lock form{padding:14px 18px 16px}#lock p{margin:9px 0}
+#lock .ps{font:600 14px var(--mono);color:var(--g);text-shadow:var(--glow);margin-top:2px}
+#lock .ps span{color:var(--g2);text-shadow:none;font-weight:500}
+#lock label{color:var(--text)}
+#pw{width:100%;box-sizing:border-box;font:16px var(--mono);padding:9px 10px;background:#010703;color:var(--hi);border:1px solid var(--line2);
+border-radius:3px;caret-color:var(--g)}
+#pw:focus{outline:0;border-color:var(--g);box-shadow:0 0 0 1px var(--g),0 0 14px rgba(57,255,122,.25)}
+#go{background:var(--g);color:#000;border-color:var(--g);box-shadow:0 0 14px rgba(57,255,122,.3)}
+.note{font-size:12px;color:var(--sage)}.err{color:var(--red);font-weight:700;font-size:12.5px}
+.err:not(:empty):before{content:"[!] "}
+#viewer{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.94);display:none;z-index:9;
+flex-direction:column;align-items:center;justify-content:center;font:13px var(--mono);color:var(--text)}
+#viewer video,#viewer img{max-width:96vw;max-height:80vh;background:#000;border:1px solid var(--line2)}
+#viewer a{color:var(--g);margin:12px 8px;padding:8px 12px;border:1px solid var(--g2);border-radius:3px;text-decoration:none;font-weight:600}
+#viewer a:empty{display:none}
+.gone{font-size:12px;color:var(--sage)}
+#ask{position:fixed;left:0;top:0;right:0;bottom:0;background:rgba(0,0,0,.72);display:none;z-index:8;align-items:flex-start;justify-content:center}
+#askbox{background:linear-gradient(rgba(5,16,9,.98),rgba(2,8,4,.99));border:1px solid var(--line2);border-radius:8px;overflow:hidden;margin:60px 12px;
+max-width:460px;width:100%;box-sizing:border-box;font:14px var(--body);box-shadow:0 0 0 1px #000,0 0 40px rgba(57,255,122,.12)}
+#askbox h3{margin:0;display:flex;align-items:center;gap:10px;padding:9px 14px;background:#06140b;border-bottom:1px solid var(--line2);
+font:600 13px var(--mono);color:var(--g);text-shadow:var(--glow)}
+#askbox h3:before{content:"";flex:none;width:10px;height:10px;border-radius:50%;background:#ff5f57;box-shadow:15px 0 0 var(--amber),30px 0 0 var(--g);margin-right:32px}
+#askbox .in{padding:10px 14px 14px}#askbox label{display:block;margin:10px 0 4px;font:600 12px var(--mono);color:var(--g2)}
+#askbox textarea{height:96px}
+#upview{width:220px;height:220px;background:#010703;border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;
+overflow:hidden;margin:6px 0}#upvid{max-width:220px;max-height:220px;transition:transform .2s}
+.chips button{margin:2px 4px 2px 0;padding:6px 10px}.chips button.sel{background:var(--g);color:#000;border-color:var(--g)}
+/* the recorder: full screen over the camera (above the scanlines, so the picture is as filmed), big targets for a thumb */
+#rec{position:fixed;left:0;top:0;right:0;bottom:0;background:#000;z-index:10;display:none;color:var(--hi);overflow:hidden;
+font:14px var(--mono);-webkit-user-select:none;user-select:none}
+#rec button,#recreview button{font:600 13px var(--mono);color:var(--g);background:rgba(0,6,2,.6);border:1px solid rgba(57,255,122,.6);
+border-radius:4px;padding:9px 13px}
+#rec button:hover,#recreview button:hover{background:var(--g);color:#000}
+#recview{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;background:#000}
+#rectop{position:absolute;left:0;right:0;top:0;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;
+padding-top:max(10px,env(safe-area-inset-top))}
+#recclock{font:700 15px var(--mono);color:var(--g);font-variant-numeric:tabular-nums;text-shadow:0 1px 3px #000,var(--glow)}
+#rec.on #recclock:before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;background:#ff3b30;margin-right:7px;box-shadow:0 0 8px #ff3b30}
+#recprompt{position:absolute;left:10px;right:10px;top:calc(56px + env(safe-area-inset-top));height:31vh;overflow-y:auto;
+background:rgba(0,4,1,.58);border:1px solid rgba(57,255,122,.38);padding:10px 14px;font:500 24px/1.38 var(--body);color:#eefcf1;display:none;
+-webkit-overflow-scrolling:touch;box-sizing:border-box}
+#recprompt p{margin:0 0 .55em}#recprompt:after{content:"";display:block;height:28vh}
+#recbar{position:absolute;left:0;right:0;bottom:0;padding:10px 12px;padding-bottom:max(16px,env(safe-area-inset-bottom));
+background:linear-gradient(transparent,rgba(0,0,0,.72))}
+#rectakes{display:flex;gap:6px;overflow-x:auto;min-height:36px;margin-bottom:10px}#rectakes button{flex:none;padding:6px 10px}
+#recctl{display:flex;align-items:center;justify-content:space-between}#recctl>span{width:96px;display:flex}
+#recctl>span:last-child{justify-content:flex-end}
+#rec #recgo{width:74px;height:74px;border-radius:50%;border:4px solid var(--g);background:transparent;position:relative;padding:0;
+box-shadow:0 0 16px rgba(57,255,122,.45)}
+#recgo:after{content:"";position:absolute;left:6px;top:6px;right:6px;bottom:6px;border-radius:50%;background:#ff3b30;transition:all .15s}
+#rec.on #recgo:after{left:21px;top:21px;right:21px;bottom:21px;border-radius:6px}
+#recsheet,#recreview{position:absolute;left:0;top:0;right:0;bottom:0;background:#000;overflow-y:auto;display:none;box-sizing:border-box;
+padding:12px 14px;padding-top:max(12px,env(safe-area-inset-top));padding-bottom:max(24px,env(safe-area-inset-bottom));-webkit-user-select:text;user-select:text}
+#recreview h3,#recsheet h3{font:600 16px var(--mono);margin:4px 0 10px;color:var(--g);text-shadow:var(--glow)}
+#recreview h3:before,#recsheet h3:before{content:"$ ";color:var(--g2);text-shadow:none}
+#recreview textarea,#recsheet textarea{width:100%;box-sizing:border-box;min-height:90px;background:#010703;color:var(--hi);border:1px solid var(--line2);
+border-radius:3px;font:15px var(--body);padding:8px;margin:8px 0;caret-color:var(--g)}
+#recsheet textarea{min-height:42vh}
+.take{border-top:1px dashed var(--line2);padding:12px 0}.take b{color:var(--g)}.take .row{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+.takeview{width:min(84vw,42vh);height:min(84vw,42vh);margin:8px auto;display:flex;align-items:center;justify-content:center;background:#010703;
+border:1px solid var(--line);overflow:hidden}
+.takeview video{max-width:100%;max-height:100%;transition:transform .2s}
+.take input[type=range]{width:100%;margin:4px 0 8px;accent-color:var(--g)}.rsmall{font-size:12.5px;color:var(--sage)}
+#recreview .chips button.sel,#recsheet .chips button.sel{background:var(--g);color:#000}
+#recreview .send{background:var(--g);color:#000;font-weight:700;padding:12px 18px;margin-top:6px;box-shadow:0 0 14px rgba(57,255,122,.35)}
+@media (max-width:480px){#lock{margin:10vh 12px 24px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style></head><body>
+<div id="lock" style="display:none"><div class="tb"><span>eric@reel-desk:<b>~/unlock</b></span></div><form id="form">
+<p class="ps"><span>$</span> ./open --passphrase</p>
+<p><label for="pw" class="note">Passphrase</label><br><input type="password" id="pw" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false"></p>
+<p><label><input type="checkbox" id="keep" checked> Remember on this device</label></p>
+<p><button type="submit" id="go">Open</button> <span id="msg" class="note"></span></p>
+<p class="note">Your desk is encrypted. It opens here, on this device: the passphrase never leaves it.</p></form></div>
+<div id="app"></div>
+<div id="viewer"><div id="vbox"></div><div><a href="#" id="vsave">Save</a><a href="#" id="vclose">Close</a></div></div>
+<div id="ask"><div id="askbox"></div></div>
+<script>
+"use strict";
+const SALT = "7c2b78ea2a242cf67c959d4870e0e413", ITER = 600000, BUILD = "ca40a0e83511", KEEP = "reeldesk-key-" + SALT;
+const $ = id => document.getElementById(id);
+const unhex = s => new Uint8Array(s.match(/../g).map(h => parseInt(h, 16)));
+const tohex = b => [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, "0")).join("");
+let KEY = null, B = null;
+const blobs = new Map();
+
+function store(op, v) { try { return op === "get" ? localStorage.getItem(KEEP) : op === "set" ? localStorage.setItem(KEEP, v) : localStorage.removeItem(KEEP); } catch (e) { return null; } }
+async function derive(pw) {
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw.trim().normalize("NFC")), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt: unhex(SALT), iterations: ITER, hash: "SHA-256" }, base,
+    { name: "AES-GCM", length: 256 }, true, ["decrypt"]);
+}
+const decrypt = buf => crypto.subtle.decrypt({ name: "AES-GCM", iv: buf.slice(0, 12) }, KEY, buf.slice(12));
+async function gunzip(buf) { return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).text(); }
+async function load() {
+  const r = await fetch("site.bin?b=" + BUILD, { cache: "no-cache" });
+  if (!r.ok) throw new Error("The desk didn't load (" + r.status + "). Try again in a minute.");
+  B = JSON.parse(await gunzip(await decrypt(await r.arrayBuffer())));
+  await loadDesk();
+}
+// The phone link changes when the PC sleeps; desk.bin always has the latest, published in seconds. The newer of it and
+// the link inside site.bin wins (a copy published before desk.bin existed has no "t": its own link stands).
+let DESK_T = 0;
+async function loadDesk() {
+  try {
+    const r = await fetch("desk.bin?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) return false;
+    const d = JSON.parse(new TextDecoder().decode(await decrypt(await r.arrayBuffer())));
+    if (!B.t || !d || !("desk" in d) || (d.t || 0) < Math.max(B.t, DESK_T)) return false;
+    DESK_T = d.t;
+    if (JSON.stringify(d.desk) === JSON.stringify(B.desk)) return false;
+    B.desk = d.desk; SIGNER = null;
+    return true;
+  } catch (e) { return false; }
+}
+function showLock(text) {
+  $("app").innerHTML = ""; $("lock").style.display = "block";
+  $("msg").textContent = text || ""; $("msg").className = text ? "err" : "note"; $("go").disabled = false; $("pw").focus();
+}
+$("form").addEventListener("submit", async ev => {
+  ev.preventDefault();
+  $("go").disabled = true; $("msg").className = "note"; $("msg").textContent = "Opening...";
+  try {
+    KEY = await derive($("pw").value); await load();
+    if ($("keep").checked) store("set", tohex(await crypto.subtle.exportKey("raw", KEY)));
+    $("pw").value = ""; start();
+  } catch (e) {
+    KEY = null; showLock(e.name === "OperationError" ? "That passphrase didn't open it." : e.message);
+  }
+});
+
+// ---- the desk, page by page (#/ is Ideas, #/jobs, #/job/<id>, #/idea/<id>/read ...)
+function route() { return decodeURIComponent(location.hash.slice(1)) || "/"; }
+function start() {
+  $("lock").style.display = "none";
+  if (!$("deskcss")) { const s = document.createElement("style"); s.id = "deskcss"; s.textContent = B.css; document.head.append(s); }
+  show();
+  checkDesk();
+  setInterval(checkDesk, 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkDesk(); });
+}
+// A page shows at once from the encrypted copy, then, while the desk is online, the live page from the desk replaces it
+// (and active pages refresh by themselves). Offline, the copy is all there is.
+const NOT_HERE = { t: "Not here", s: "", b: "<div id='win'><div id='top'><span class='path'>eric@reel-desk:<b>~</b></span></div><div id='page'><p>That page isn't in the online copy yet. It shows up here while your desk is " +
+  "online, or within a few minutes in the copy. <a href='/'>Back to the ideas</a></p></div></div>" };
+let SHOWN = { r: null, b: null, live: false };
+function render(pg, keep) {
+  const y = window.scrollY, app = $("app");
+  document.title = pg.t; document.body.setAttribute("style", pg.s || "");
+  app.innerHTML = pg.b;
+  SHOWN = { r: route(), b: pg.b, live: !!pg.live };
+  app.querySelectorAll("[data-at]").forEach(e => { e.textContent = pg.live ? "just now (live)" : B.at; });
+  app.querySelectorAll("[data-gone]").forEach(e => {
+    const n = document.createElement("span"); n.className = "gone";
+    n.textContent = (e.textContent ? e.textContent + " " : "") + "(on your PC: opens here while it's on)"; e.replaceWith(n);
+  });
+  app.querySelectorAll("script").forEach(s => { const n = document.createElement("script"); n.textContent = s.textContent; s.replaceWith(n); });
+  app.querySelectorAll("img[data-enc-src], img[data-live-src]").forEach(el => seen.observe(el));
+  app.querySelectorAll("video[data-enc-src], video[data-live-src]").forEach(video);
+  window.scrollTo(0, keep ? y : 0);
+  paintDesk();
+}
+function show() {
+  const r = route(), pg = B.routes[r] || B.routes[r.split("?")[0]];
+  render(pg || { t: "Reel Desk", s: "", b: "<div id='win'><div id='top'><span class='path'>eric@reel-desk:<b>~</b></span></div><div id='page'><p class='small'>Loading from your desk...</p></div></div>" }, false);
+  freshen(r, !pg);
+}
+function busyHere() {  // don't swap the page under someone: a playing video, the viewer, a dialog, typing, an upload
+  return [...$("app").querySelectorAll("video")].some(v => !v.paused) || $("viewer").style.display === "flex" ||
+    $("ask").style.display === "flex" || $("app").contains(document.activeElement) && /^(INPUT|TEXTAREA)$/.test(document.activeElement.tagName) ||
+    route().startsWith("/new");
+}
+async function freshen(r, missing) {
+  if (!ONLINE || !B.desk) { if (missing && ONLINE === false) render(NOT_HERE, false); return; }
+  try {
+    const pg = await call("/up/page?r=" + encodeURIComponent(r), { timeout: 20000 });
+    if (route() !== r) return;
+    if (pg.b === SHOWN.b) {  // nothing changed: it's live as it is
+      SHOWN.live = true;
+      $("app").querySelectorAll("[data-at]").forEach(e => { e.textContent = "just now (live)"; });
+      return;
+    }
+    if (missing || !busyHere()) render(Object.assign(pg, { live: true }), !missing);
+  } catch (e) { if (missing) render(NOT_HERE, false); }
+}
+setInterval(() => {  // job pages, and any page showing something under way (data-busy), refresh every 8 s; the rest every 45 s
+  if (!B || !ONLINE || document.hidden) return;
+  const r = route(), jobsy = r === "/jobs" || r.startsWith("/job/") || !!$("app").querySelector("[data-busy]");
+  if (jobsy || Date.now() % 45000 < 8000) freshen(r, false);
+}, 8000);
+window.addEventListener("hashchange", () => { if (B) show(); });
+document.addEventListener("click", ev => {
+  const a = ev.target.closest && ev.target.closest("a");
+  if (!a || !B) return;
+  if (a.hasAttribute("data-lock")) { ev.preventDefault(); store("del"); location.hash = ""; location.reload(); return; }
+  if (a.dataset.encHref) { ev.preventDefault(); view(a.dataset.encHref); return; }
+  if (a.dataset.liveHref) { ev.preventDefault(); view(a.dataset.liveHref, true); return; }
+  if (a.dataset.req) { ev.preventDefault(); request(a); return; }
+  const h = a.getAttribute("href") || "";
+  if (h.startsWith("/") && !h.startsWith("//")) {
+    ev.preventDefault();
+    if (a.target === "_blank") window.open("#" + h, "_blank"); else location.hash = h;
+  }
+});
+document.addEventListener("submit", ev => {
+  if ($("app").contains(ev.target)) { ev.preventDefault(); alert("That works on the desk at home."); }
+});
+
+// ---- images and videos: from the encrypted copy (decrypted on this device), or live from the desk, when they're needed
+const TYPES = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", gif: "image/gif", webp: "image/webp", mp4: "video/mp4",
+  webm: "video/webm", mov: "video/quicktime", srt: "text/plain", md: "text/plain", txt: "text/plain" };
+function metaOf(path, live) {
+  if (!live) return B.assets[path];
+  const name = decodeURIComponent(path.split("?")[0].split("/").pop());
+  return { n: name, t: TYPES[(name.split(".").pop() || "").toLowerCase()] || "application/octet-stream" };
+}
+// Where a file comes from, quickest first: the encrypted copy on GitHub when it has this very file (GitHub's servers are
+// fast; this PC uploads at about 0.3 MB/s), else live from the desk. Live videos stream through a signed link, so they
+// play while they load and save through the phone's own download manager; nothing waits for a whole video in silence.
+function source(path, live) {
+  const bare = path.split("?")[0], q = new URLSearchParams(path.split("?")[1] || ""), z = +(q.get("z") || 0), a = B.assets[bare];
+  if (!live) return { enc: path, size: (B.assets[path] || {}).z || 0 };
+  if (a && (!z || a.z === z)) return { enc: bare, size: a.z };
+  return { live: bare, size: z };
+}
+let SIGNER = null;
+async function signed(path, dl) {  // a link that's good for 6 hours, for this one file; the token itself never goes in a URL
+  if (!SIGNER) SIGNER = await crypto.subtle.importKey("raw", new TextEncoder().encode(B.desk.token), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const e = Math.floor(Date.now() / 1000) + 6 * 3600;
+  const s = tohex(await crypto.subtle.sign("HMAC", SIGNER, new TextEncoder().encode(path + "|" + e)));
+  return B.desk.url + "/up/v?p=" + encodeURIComponent(path) + "&e=" + e + "&s=" + s + (dl ? "&dl=1" : "");
+}
+async function bytes(url, opts, onp) {  // a download, with progress as it comes in
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error("couldn't load it (" + r.status + ")");
+  const total = +r.headers.get("Content-Length") || 0;
+  if (!r.body || !onp) return new Uint8Array(await r.arrayBuffer());
+  const reader = r.body.getReader(), parts = [];
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value); n += value.length; onp(n, total);
+  }
+  const out = new Uint8Array(n);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out;
+}
+function blobFor(path, live, onp) {
+  const src = source(path, live), key = src.enc ? "enc:" + src.enc : "live:" + src.live;
+  if (!blobs.has(key)) {
+    blobs.set(key, (async () => {
+      if (src.live) {
+        const b = await bytes(B.desk.url + "/up/f?p=" + encodeURIComponent(src.live), { headers: { Authorization: "Bearer " + B.desk.token } }, onp);
+        return URL.createObjectURL(new Blob([b], { type: metaOf(src.live, true).t }));
+      }
+      const a = B.assets[src.enc];
+      if (!a) throw new Error("not in the online copy");
+      const b = await bytes("m/" + a.f + ".bin", {}, onp && ((n, t) => onp(n, t || a.z)));
+      return URL.createObjectURL(new Blob([await decrypt(b.buffer)], { type: a.t }));
+    })());
+    blobs.get(key).catch(() => blobs.delete(key));
+  }
+  return blobs.get(key);
+}
+const seen = new IntersectionObserver(es => es.forEach(async e => {
+  if (!e.isIntersecting) return;
+  seen.unobserve(e.target);
+  const live = !!e.target.dataset.liveSrc;
+  try { e.target.src = await blobFor(live ? e.target.dataset.liveSrc : e.target.dataset.encSrc, live); } catch (err) { e.target.alt = err.message; }
+}), { rootMargin: "500px" });
+function mb(a) { return a && a.z ? " (" + (a.z / 1e6).toFixed(1) + " MB)" : ""; }
+const loading = (n, t) => "Loading " + mbs(n) + (t ? " of " + mbs(t) + " (" + Math.floor(100 * n / t) + "%)" : "") + "...";
+function video(v) {
+  const live = !!v.dataset.liveSrc, path = live ? v.dataset.liveSrc : v.dataset.encSrc, src = source(path, live), b = document.createElement("button");
+  b.textContent = "Play the video" + (src.size ? " (" + mbs(src.size) + ")" : ""); v.style.display = "none"; v.before(b);
+  b.onclick = async () => {
+    b.disabled = true; b.textContent = "Opening...";
+    try {
+      v.playsInline = true;
+      v.src = src.live ? await signed(src.live) : await blobFor(path, live, (n, t) => { b.textContent = loading(n, t); });
+      v.style.display = ""; b.remove(); v.play().catch(() => {});
+    } catch (err) { b.disabled = false; b.textContent = "Couldn't open it: " + err.message + ". Tap to try again."; }
+  };
+}
+async function view(path, live) {
+  const a = metaOf(source(path, live).enc || path.split("?")[0], !source(path, live).enc), src = source(path, live);
+  if (!a) return;
+  const isVideo = /^video\//.test(a.t), box = $("vbox");
+  box.innerHTML = ""; $("viewer").style.display = "flex";
+  const note = document.createElement("p");
+  note.style.cssText = "color:var(--text);font-size:13px;margin:6px"; box.append(note);
+  if (src.live && isVideo) {  // live: stream it; to post it, fetch it whole here (with progress), then share or save it
+    const v = document.createElement("video");
+    v.controls = true; v.autoplay = true; v.playsInline = true; v.src = await signed(src.live);
+    box.prepend(v);
+    note.textContent = "Playing from your PC as it loads.";
+    // Posting needs the whole file: a download still under way (this PC uploads slowly) or cut short gives Instagram and
+    // players a file they can't open. So it's fetched here, checked against its size, then shared or saved complete.
+    const go = document.createElement("button");
+    go.textContent = "Get it ready to post" + (src.size ? " (" + mbs(src.size) + ")" : "");
+    note.after(go);
+    go.onclick = async () => {
+      go.disabled = true;
+      try {
+        const b = await bytes(B.desk.url + "/up/f?p=" + encodeURIComponent(src.live), { headers: { Authorization: "Bearer " + B.desk.token } },
+          (n, t) => { go.textContent = "Downloading " + mbs(n) + (t ? " of " + mbs(t) + " (" + Math.floor(100 * n / t) + "%)" : "") + ". Keep this page open."; });
+        if (src.size && b.length !== src.size) throw new Error("it arrived incomplete (" + mbs(b.length) + " of " + mbs(src.size) + ")");
+        const file = new File([b], a.n, { type: a.t || "video/mp4" });
+        $("vsave").href = URL.createObjectURL(file); $("vsave").download = a.n; $("vsave").textContent = "Save " + a.n + " (complete, " + mbs(b.length) + ")";
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          go.disabled = false; go.textContent = "Share to Instagram (or anywhere)";
+          go.onclick = () => navigator.share({ files: [file], title: a.n }).catch(() => {});
+        } else go.textContent = "Ready: tap Save below";
+      } catch (err) { go.disabled = false; go.textContent = "Couldn't get it: " + err.message + ". Tap to try again."; }
+    };
+    $("vsave").href = await signed(src.live, true); $("vsave").removeAttribute("download"); $("vsave").textContent = "Save " + a.n + " (in the background)";
+    return;
+  }
+  $("vsave").textContent = ""; note.textContent = "Opening...";
+  let url;
+  try { url = await blobFor(path, live, (n, t) => { note.textContent = loading(n, t); }); }
+  catch (err) { note.textContent = "Couldn't open it: " + err.message; return; }
+  note.textContent = "";
+  if (!/^(video|image)\//.test(a.t)) {
+    $("viewer").style.display = "none";
+    const d = document.createElement("a"); d.href = url; d.download = a.n; document.body.append(d); d.click(); d.remove(); return;
+  }
+  const m = document.createElement(isVideo ? "video" : "img");
+  m.src = url; if (isVideo) { m.controls = true; m.autoplay = true; m.playsInline = true; }
+  box.prepend(m); $("vsave").href = url; $("vsave").download = a.n; $("vsave").textContent = "Save " + a.n;
+}
+$("vclose").onclick = ev => { ev.preventDefault(); $("viewer").style.display = "none"; $("vbox").innerHTML = ""; };
+
+// ---- the desk itself, through its phone link: while it's online, videos and buttons go straight to it
+let ONLINE = null, CLAUDE = false, UP = null, LIVE = null;
+const CHUNK = 8 << 20;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const mbs = n => (n / 1e6).toFixed(n < 1e8 ? 1 : 0) + " MB";
+function el(tag, attrs, text) { const e = document.createElement(tag); Object.assign(e, attrs || {}); if (text != null) e.textContent = text; return e; }
+async function call(path, opts) {
+  opts = opts || {};
+  const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), opts.timeout || 30000);
+  try {
+    const r = await fetch(B.desk.url + path, { method: opts.method || "GET", signal: ctl.signal, cache: "no-store",
+      headers: Object.assign({ Authorization: "Bearer " + B.desk.token }, opts.json ? { "Content-Type": "application/json" } : {}),
+      body: opts.json ? JSON.stringify(opts.json) : undefined });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || "the desk answered " + r.status);
+    return j;
+  } catch (e) {
+    throw e.name === "AbortError" ? new Error("the desk didn't answer") : e instanceof TypeError ? new Error("no connection to the desk") : e;
+  } finally { clearTimeout(t); }
+}
+let PING = {}, MISSES = 0;
+async function checkDesk() {
+  if (!B) return;
+  if (!B.desk) await loadDesk();
+  if (!B.desk) { ONLINE = false; paintDesk(); return; }
+  const was = ONLINE;
+  try {
+    PING = await call("/up/ping", { timeout: 9000 }); CLAUDE = PING.claude; ONLINE = true; MISSES = 0;
+  } catch (e) {
+    if (await loadDesk()) return checkDesk();  // the PC slept and came back with a new link: try it at once
+    MISSES++;
+    if (ONLINE === null || MISSES >= 2) ONLINE = false;  // one slow answer while the PC is busy isn't "offline"
+  }
+  paintDesk();
+  if (ONLINE && was !== true) freshen(route(), false);  // just came online: show the live page
+}
+function paintDesk() {
+  const w = PING.workers || {};
+  document.querySelectorAll("[data-desk]").forEach(e => {
+    e.innerHTML = ONLINE ? "<b class='ok'>Your PC is online</b> &middot; " + (CLAUDE ? "Claude ready" : "<b class='wait'>Claude needs a sign-in on the PC</b>") +
+      (w.max ? " &middot; " + (w.busy || 0) + " of " + w.max + " workers busy" : "") + ". Everything here is live." :
+      ONLINE === false ? "<b class='wait'>Your PC is offline</b>: showing the copy from " + B.at + ". Uploads and buttons work again when it's on." :
+      "Checking your PC...";
+  });
+  mountUploader(); mountToken();
+}
+function mountToken() {  // Analytics' Connect box: the token goes straight to the PC (/up/token) and nowhere else
+  const box = document.querySelector("[data-token-box]");
+  if (!box || box.dataset.mounted === String(ONLINE) + PING.token) return;
+  box.dataset.mounted = String(ONLINE) + PING.token;
+  if (ONLINE === null) return;
+  if (!ONLINE || !PING.token) {
+    box.innerHTML = "<p class='small'><b class='wait'>" + (ONLINE ? "This needs the desk's newest version" : "Your desk is offline") +
+      "</b>: the token goes straight to your PC, so connect it while the desk is on (or paste it on the desk's Analytics page at home).</p>";
+    return;
+  }
+  box.innerHTML = "";
+  const i = el("input", { type: "password", autocomplete: "off", placeholder: "Paste your Instagram access token" });
+  i.style.width = "100%"; i.style.boxSizing = "border-box"; i.setAttribute("autocapitalize", "off"); i.spellcheck = false;
+  const go = el("button", { type: "button" }, "Connect"), msg = el("span", { className: "small" });
+  go.onclick = async () => {
+    const t = i.value.trim();
+    if (!t) { msg.textContent = " Paste the token first."; return; }
+    go.disabled = true; msg.textContent = " Sending it to your PC...";
+    try { const j = await call("/up/token", { method: "POST", json: { token: t }, timeout: 20000 }); i.value = ""; msg.textContent = " " + j.reply; }
+    catch (e) { go.disabled = false; msg.textContent = " " + e.message; }
+  };
+  box.append(i, el("br"), go, msg);
+}
+
+// a button on the copy: done right here on the desk (its fields, then the desk's answer)
+function request(a) {
+  const kind = a.dataset.req, ref = a.dataset.ref || "", pre = {};
+  [...a.attributes].forEach(x => { if (x.name.startsWith("data-f-")) pre[x.name.slice(7)] = x.value; });
+  if (kind === "video") { location.hash = "/new" + (pre.idea ? "?idea=" + pre.idea : ""); return; }
+  if (ONLINE) { ask(kind, ref, pre); return; }
+  offline(() => request(a));
+}
+function offline(retry) {
+  const box = $("askbox"); box.innerHTML = "";
+  box.append(el("h3", {}, "Your desk is offline"));
+  const inner = el("div", { className: "in" }); box.append(inner);
+  inner.append(el("p", {}, "Your PC can't be reached right now, so this can't be done yet. It works whenever the PC is on: the desk starts " +
+    "by itself when you sign in to Windows, and keeps the PC awake while it runs."));
+  const msg = el("p", { className: "small" }), again = el("button", { type: "button" }, "Check again"), no = el("button", { type: "button" }, "Close");
+  const row = el("p");
+  row.append(again, " ", no);
+  inner.append(row, msg);
+  no.onclick = () => { $("ask").style.display = "none"; };
+  again.onclick = async () => {
+    again.disabled = true; msg.textContent = "Checking...";
+    await checkDesk();
+    if (ONLINE) { $("ask").style.display = "none"; retry(); } else { again.disabled = false; msg.textContent = "Still offline."; }
+  };
+  $("ask").style.display = "flex";
+}
+function ask(kind, ref, pre) {
+  const f = (B.forms || {})[kind];
+  if (!f) return;
+  const box = $("askbox"); box.innerHTML = "";
+  box.append(el("h3", {}, f.name));
+  const inner = el("div", { className: "in" }); box.append(inner);
+  const inputs = {};
+  f.fields.forEach(x => {
+    inner.append(el("label", {}, x.label));
+    const i = el(x.type === "input" ? "input" : "textarea", { placeholder: x.hint || "" });
+    if (x.type === "input") i.type = "text";
+    i.value = pre[x.id] || ""; inputs[x.id] = i; inner.append(i);
+  });
+  const pk = kind === "send" ? tplPicker(pre.template || "", null) : null;
+  if (pk) inner.append(el("label", {}, "The look"), pk.el);
+  const del = kind === "delete";  // a job's Delete button (his request, 11-20): one question, a red button, then back to Jobs
+  if (del) inner.append(el("p", {}, "Delete “" + (pre.title || ref) + "”?"), el("p", { className: "small" }, f.about || ""));
+  const msg = el("p", { className: "small" }), go = el("button", { type: "button" }, del ? "Delete" : "Send"), no = el("button", { type: "button" }, "Cancel");
+  if (del) go.className = "danger";
+  const row = el("p");
+  row.append(go, " ", no);
+  inner.append(row, msg);
+  const close = () => { $("ask").style.display = "none"; };
+  no.onclick = close;
+  go.onclick = async () => {
+    const fields = {};
+    for (const x of f.fields) {
+      fields[x.id] = inputs[x.id].value.trim();
+      if (x.required && !fields[x.id]) { msg.textContent = "Fill in: " + x.label; return; }
+    }
+    if (pk) fields.template = pk.value();
+    go.disabled = true; msg.textContent = del ? "Deleting..." : "Sending to your desk...";
+    try {
+      const j = await call("/up/request", { method: "POST", json: { kind, ref, fields } });
+      if (del) {  // gone at once: its row goes, the dialog closes, and Jobs comes back live from the desk
+        document.querySelectorAll("[data-job]").forEach(r => { if (r.dataset.job === ref) r.remove(); });
+        if (B.routes) {
+          delete B.routes["/job/" + ref];
+          const J = B.routes["/jobs"];
+          if (J) J.b = J.b.replace(new RegExp("<tr data-job='" + ref + "'>[\\s\\S]*?</tr>"), "");
+        }
+        msg.textContent = j.reply;
+        setTimeout(() => { close(); if (route() !== "/jobs") location.hash = "/jobs"; else freshen("/jobs", false); }, 900);
+        return;
+      }
+      msg.textContent = j.reply + (kind === "ping" ? "" : " The site shows the change within a few minutes.");
+      go.style.display = "none"; no.textContent = "Close";
+    } catch (e) {
+      go.disabled = false; msg.textContent = "That didn't reach your desk (" + e.message + "). Try again in a moment.";
+    }
+  };
+  $("ask").style.display = "flex";
+  if (kind === "ping") go.click();
+}
+$("ask").addEventListener("click", ev => { if (ev.target === $("ask")) $("ask").style.display = "none"; });
+
+// The look for a video (his request, 11-18): the house style (Hairline) or another format, each with a few silent seconds of
+// its example reel beside the list (desk.template_demo, carried encrypted in the copy). Only on a desk that takes a look
+// (its ping says so); an older desk keeps the house style. Returns { el, value } or null.
+let UPLOOK = "";
+function tplPicker(cur, onpick) {
+  const F = (B && B.formats) || [];
+  if (!F.length || !PING.templates) return null;
+  const wrap = el("div"), sel = el("select"), box = el("div", { className: "tpl" }), v = el("video"), txt = el("div");
+  v.muted = true; v.loop = true; v.playsInline = true; v.hidden = true;
+  ["muted", "loop", "playsinline"].forEach(a => v.setAttribute(a, ""));
+  let grp = null;
+  F.forEach(f => {
+    if (f.g && (!grp || grp.label !== f.g)) { grp = el("optgroup"); grp.label = f.g; sel.append(grp); }
+    (f.g ? grp : sel).append(el("option", { value: f.v }, f.name));
+  });
+  sel.value = F.some(f => f.v === cur) ? cur : "";
+  const name = el("b"), sum = el("span", { className: "small" }), can = el("i"), note = el("span", { className: "small" });
+  const canl = el("span", { className: "small" }); canl.append(can);
+  txt.append(name, el("br"), sum, el("br"), canl, el("br"), note);
+  box.append(v, txt); wrap.append(sel, box);
+  const now = () => F.find(x => x.v === sel.value) || F[0];
+  const show = async () => {
+    const f = now();
+    name.textContent = f.name; sum.textContent = f.sum || ""; can.textContent = f.can || "";
+    note.textContent = f.demo ? "A few silent seconds of its example reel." : f.proposed ? "Proposed from another creator's reel: " +
+      "there's no example in your footage yet. Claude builds it the first time you pick it." : "";
+    if (!f.demo) { v.pause(); v.removeAttribute("src"); v.hidden = true; return; }
+    v.hidden = false;
+    try { const u = await blobFor(f.demo, false); if (now() === f) { if (v.src !== u) v.src = u; v.play().catch(() => {}); } }
+    catch (e) { v.hidden = true; }
+  };
+  sel.onchange = () => { if (onpick) onpick(sel.value); show(); };
+  show();
+  return { el: wrap, value: () => sel.value };
+}
+
+// New video: pick it, it uploads in 8 MB pieces (resumable), add notes, Send
+function mountUploader() {
+  const box = $("native-upload");
+  if (!box || box.dataset.mounted === String(ONLINE)) return;
+  if (UP && UP.busy && box.dataset.mounted === "true") return;  // one missed check mid-upload: keep going, it retries by itself
+  box.dataset.mounted = String(ONLINE);
+  if (ONLINE === null) return;
+  if (!ONLINE) {
+    box.innerHTML = "<div class='box'><b class='wait'>Your desk is offline</b>, so the video can't go up yet.<p class='small'>Videos go " +
+      "straight to your PC, so it needs to be on. The desk starts by itself when you sign in to Windows and keeps the PC awake while it " +
+      "runs. If the PC was just switched on or restarted, give it a minute or two.</p><button type='button' id='upagain'>Check again</button> " +
+      "<span class='small' id='upagainmsg'></span></div>";
+    $("upagain").onclick = async () => {
+      $("upagain").disabled = true; $("upagainmsg").textContent = "Checking...";
+      await checkDesk();
+      if (!ONLINE && $("upagain")) { $("upagain").disabled = false; $("upagainmsg").textContent = "Still offline."; }
+    };
+    return;
+  }
+  // only a desk that takes recordings and speed-ups (its ping says so) gets them; an older desk keeps the plain upload
+  const canRec = !!(PING.recorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder);
+  const takes = REC && !REC.sent ? REC.takes.filter(t => !t.gone).length : 0;
+  box.innerHTML = (canRec ? "<div class='box'><p style='margin:0'><button type='button' id='recopen'><b>" +
+    (takes ? "Back to your recording (" + takes + " take" + (takes > 1 ? "s" : "") + ")" : "Record it here") + "</b></button> " +
+    "<span class='small'>Film it on this phone, take by take, with " + (box.dataset.script ? "the script" : "your script, if you add one,") +
+    " scrolling near the camera. Each take goes up while you film the next. Then trim, turn, speed it up if you like, and send.</span></p></div>" : "") +
+    "<div class='box'><p style='margin-top:0'><b>1. Or choose a video you filmed</b><br><input type='file' id='upfile' accept='video/*'></p>" +
+    "<div id='uppick' style='display:none'><div id='upview'><video id='upvid' muted playsinline preload='metadata'></video></div>" +
+    "<button type='button' id='uprl'>Turn left</button> <button type='button' id='uprr'>Turn right</button> <span class='small' id='uprot'>As filmed</span>" +
+    (PING.recorder ? "<p class='chips small'>Speed: " + SPEEDS.map(s => "<button type='button' data-speed='" + s + "'>" + s + "x</button>").join("") +
+    " <span class='small'>(tap the video to preview)</span></p>" : "") +
+    "<p class='small' id='upname'></p><div id='bar'><div id='upbar'></div></div><span class='small' id='upmsg'></span></div>" +
+    "<p><b>2. Anything to fix or add?</b> <span class='small'>(optional)</span><br><textarea id='upnotes' placeholder='Touch-ups, comments, " +
+    "details. E.g. cut the first few seconds, show the offer letter when I say $60,000, keep it under a minute.'></textarea></p>" +
+    "<div id='uplook'><p class='small'>Look: <b>Hairline</b>, your house style for talking heads: black, real visuals above you while you " +
+    "talk. Claude builds the edit around what you say and shows you a storyboard before anything is rendered.</p></div>" +
+    "<p><button type='button' id='upsend' disabled>Send to Claude</button> <span class='small' id='upsendmsg'></span></p></div><div id='uplive'></div>";
+  $("upfile").onchange = () => { const f = $("upfile").files[0]; if (f) pick(f); };
+  $("uprl").onclick = () => turn(-90);
+  $("uprr").onclick = () => turn(90);
+  $("upsend").onclick = sendNotes;
+  if ($("recopen")) $("recopen").onclick = recOpen;
+  const pk = tplPicker(UPLOOK, x => { UPLOOK = x; });
+  if (pk) {
+    $("uplook").innerHTML = "<p><b>3. The look</b> <span class='small'>(your house style, Hairline, unless you pick another; Claude " +
+      "shows you a storyboard before anything is rendered)</span></p>";
+    $("uplook").append(pk.el);
+  }
+  const chips = [...box.querySelectorAll("[data-speed]")];
+  const speed = s => { UPSPEED = s; chips.forEach(c => c.classList.toggle("sel", +c.dataset.speed === s));
+    const v = $("upvid"); if (v) { v.playbackRate = s; v.preservesPitch = true; } };
+  chips.forEach(c => { c.onclick = () => speed(+c.dataset.speed); });
+  speed(UPSPEED);
+  $("upvid").onloadedmetadata = () => speed(UPSPEED);  // a new source resets the rate
+  $("upvid").onclick = () => { const v = $("upvid"); v.muted = false; v.paused ? v.play().catch(() => {}) : v.pause(); };
+  if (UP && (UP.busy || !UP.sent)) {  // back on this page while a video is still going up (or waiting for its notes)
+    $("uppick").style.display = ""; $("upname").textContent = UP.file.name + " · " + mbs(UP.file.size);
+    try { $("upvid").src = URL.createObjectURL(UP.file); } catch (e) {}
+    turn(0); progress(UP.have); $("upsend").disabled = false;
+    if (UP.notes) $("upnotes").value = UP.notes;
+  } else if (UP && UP.sent) {
+    UP = null;  // a new page is a new video: the last one is under Jobs now
+  }
+}
+function report(msg) {  // what went wrong, to the desk's log (desk/upload.log), so it can be fixed later
+  try { call("/up/log", { method: "POST", json: { id: UP && UP.id, msg: String(msg).slice(0, 300) }, timeout: 8000 }).catch(() => {}); } catch (e) {}
+}
+function turn(d) {
+  if (!UP) return;
+  UP.rot = (UP.rot + d + 360) % 360;
+  if ($("upvid")) $("upvid").style.transform = "rotate(" + UP.rot + "deg)";
+  if ($("uprot")) $("uprot").textContent = { 0: "As filmed", 90: "Turned right", 180: "Upside down", 270: "Turned left" }[UP.rot];
+}
+function memo(key, id) {
+  let m = {};
+  try { m = JSON.parse(localStorage.getItem("reeldesk-uploads") || "{}"); } catch (e) {}
+  if (id === undefined) return m[key];
+  m[key] = id;
+  try { localStorage.setItem("reeldesk-uploads", JSON.stringify(m)); } catch (e) {}
+}
+function progress(n, text, t0, b0) {
+  if (!UP || !$("upbar")) return;
+  const size = UP.file.size, pct = size ? Math.floor(100 * n / size) : 0;
+  $("upbar").style.width = pct + "%";
+  let rate = "";
+  if (t0 && n > b0) { const s = (Date.now() - t0) / 1000; if (s > 2) rate = ", " + ((n - b0) / 1e6 / s).toFixed(1) + " MB/s"; }
+  $("upmsg").textContent = text || (n >= size ? "Uploaded." : "Uploading: " + pct + "% (" + mbs(n) + " of " + mbs(size) + rate + "). Keep this page open.");
+}
+window.reelPick = pick;  // what choosing a file does (tests call it with a File too)
+const PIECE = 4 << 20, LANES = 3;  // 4 MB pieces, 3 on the way at once: hides the network's round trips on a phone
+async function pick(file) {
+  if (UP && UP.busy) { alert("One video at a time: this one is still uploading."); return; }
+  UP = { file, rot: 0, have: 0, id: null, busy: true, sent: false, missing: null };
+  $("uppick").style.display = ""; $("upname").textContent = file.name + " · " + mbs(file.size);
+  try { $("upvid").src = URL.createObjectURL(file); } catch (e) {}
+  turn(0); $("upsend").disabled = false; $("upsendmsg").textContent = ""; $("uplive").innerHTML = "";
+  const key = file.name + "|" + file.size + "|" + file.lastModified;
+  let lock = null;
+  try { lock = await navigator.wakeLock.request("screen"); } catch (e) {}  // the screen stays on while it uploads
+  try {
+    const known = memo(key);
+    if (known) {
+      try {
+        const s = await call("/up/job?id=" + encodeURIComponent(known));
+        if (s.state === "uploading" && s.piece === PIECE) { UP.id = known; UP.missing = s.missing; UP.have = s.size - s.missing.reduce((n, k) =>
+          n + Math.min(PIECE, s.size - k * PIECE), 0); }
+        else if (s.state === "uploaded") { UP.id = known; UP.have = file.size; UP.missing = []; }
+        else if (s.state && s.state !== "uploading") { UP.id = known; UP.have = file.size; UP.sent = true; $("upsend").disabled = true;
+          progress(file.size, "Already sent."); live(); return; }
+      } catch (e) {}
+    }
+    if (!UP.id) {
+      const j = await call("/up/new", { method: "POST", json: { name: file.name, size: file.size, type: file.type, key, piece: PIECE,
+        idea: $("native-upload").dataset.idea || "" } });
+      UP.id = j.id; UP.missing = j.missing; memo(key, j.id);
+    }
+    progress(UP.have, UP.have ? "Carrying on from " + mbs(UP.have) + "..." : "Starting...");
+    await push();
+    await call("/up/done?id=" + encodeURIComponent(UP.id), { method: "POST", json: {} });
+    progress(file.size, UP.sent ? "Uploaded." : "Uploaded. Add anything you want changed, then press Send to Claude.");
+  } catch (e) {
+    report("upload stopped: " + e.message);
+    progress(UP.have, "The upload stopped: " + e.message + ". Choose the same video again to carry on from " + mbs(UP.have) + ".");
+  } finally {
+    UP.busy = false;
+    if (lock) lock.release().catch(() => {});
+  }
+}
+async function push() {  // the missing pieces, LANES at a time, in any order; a failed piece goes back in the queue
+  const f = UP.file, t0 = Date.now(), b0 = UP.have, queue = [...UP.missing], flying = new Map();
+  let fails = 0, stop = null;
+  const show = () => progress(UP.have + [...flying.values()].reduce((a, b) => a + b, 0), null, t0, b0);
+  const lane = async () => {
+    while (queue.length && !stop) {
+      const k = queue.shift(), at = k * PIECE, blob = f.slice(at, Math.min(f.size, at + PIECE));
+      try {
+        await piece(UP.id, at, blob, n => { flying.set(k, n); show(); });
+        flying.delete(k); UP.have += blob.size; show();
+      } catch (e) {
+        flying.delete(k); queue.push(k);
+        if (++fails > 12) { stop = e; break; }
+        report("piece " + k + ": " + e.message + " (retrying)");
+        progress(UP.have, "A brief connection hiccup: carrying on by itself...");
+        await sleep(Math.min(20000, 1000 * 2 ** Math.min(fails, 4)));
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(LANES, queue.length || 1) }, lane));
+  if (stop) throw stop;
+}
+function piece(id, at, blob, onp, take) {  // take: which take of a recording (the recorder), else none
+  return new Promise((ok, bad) => {
+    const x = new XMLHttpRequest();
+    x.open("PUT", B.desk.url + "/up/chunk?id=" + encodeURIComponent(id) + "&at=" + at + (take != null ? "&t=" + take : ""));
+    x.setRequestHeader("Authorization", "Bearer " + B.desk.token);
+    x.timeout = 180000;
+    x.upload.onprogress = e => onp(e.loaded);
+    x.onload = () => {
+      let j = {};
+      try { j = JSON.parse(x.responseText); } catch (e) {}
+      if (x.status === 200) ok(j); else bad(new Error(j.error || "the desk answered " + x.status));
+    };
+    x.onerror = () => bad(new Error("no connection to the desk"));
+    x.ontimeout = () => bad(new Error("the desk took too long"));
+    x.send(blob);
+  });
+}
+async function sendNotes() {
+  if (!UP) { $("upsendmsg").textContent = "Choose the video first."; return; }
+  UP.notes = $("upnotes").value;
+  $("upsend").disabled = true; $("upsendmsg").textContent = "Sending...";
+  for (let i = 0; i < 100 && !UP.id; i++) await sleep(200);
+  try {
+    if (!UP.id) throw new Error("the upload hasn't started");
+    await call("/up/send?id=" + encodeURIComponent(UP.id), { method: "POST", json: { notes: UP.notes, rotate: UP.rot, speed: PING.recorder ? UPSPEED : 1, template: UPLOOK } });
+    UP.sent = true;
+    $("upsendmsg").textContent = UP.have < UP.file.size ? "Got it: it starts as soon as the upload finishes." : "Sent.";
+    live();
+  } catch (e) {
+    report("send failed: " + e.message);
+    $("upsend").disabled = false; $("upsendmsg").textContent = "That didn't send (" + e.message + "). Try again.";
+  }
+}
+let LIVEID = null;
+function live(id) {  // this video's progress, from the desk, every 4 s: its step and roughly how long is left
+  id = id || UP.id; LIVEID = id;
+  const paint = j => {
+    const box = $("uplive"); if (!box || LIVEID !== id) return;
+    const p = j.progress || {};
+    box.innerHTML = "";
+    const d = el("div", { className: "box" });
+    d.append(el("b", {}, j.title || "Your video"), el("br"), el("span", {}, p.line || j.label || j.state));
+    if (p.pct != null && !["storyboard", "done", "failed"].includes(j.state)) {
+      const bar = el("div", { className: "pbar" }), fill = el("div"); fill.style.width = p.pct + "%"; bar.append(fill); d.append(bar);
+    }
+    const link = el("a", { href: "/job/" + j.id }, "Open the job");
+    d.append(el("br"), link, el("span", { className: "small" }, "  (job " + j.id + ")"));
+    box.append(d);
+  };
+  clearInterval(LIVE);
+  const tick = async () => {
+    try {
+      const j = await call("/up/job?id=" + encodeURIComponent(id));
+      paint(j);
+      if (["storyboard", "done", "failed"].includes(j.state)) clearInterval(LIVE);
+    } catch (e) {}
+  };
+  tick();
+  LIVE = setInterval(tick, 4000);
+}
+
+// ---- The recorder: film it right here, take by take, with the script scrolling near the lens. Each take goes up to the
+// desk while you film the next (desk_upload.py: one job, a file per take). Then trim, turn, crop, speed and Send: the
+// desk joins the takes in order, in one encode, and edits as usual. Nothing heavy runs on the phone.
+const SPEEDS = [1, 1.1, 1.2, 1.3, 1.5];
+const RECMIME = ['video/mp4;codecs="avc1.640028,mp4a.40.2"', "video/mp4;codecs=avc1", "video/mp4", "video/webm;codecs=vp9,opus",
+  "video/webm;codecs=vp8,opus", "video/webm"];
+let REC = null, UPSPEED = 1, RECLOOP = false;
+const clock = s => Math.floor(s / 60) + ":" + String(Math.floor(s % 60)).padStart(2, "0");
+const btn = (text, fn) => { const b = el("button", { type: "button" }, text); b.onclick = fn; return b; };
+const upPct = t => Math.min(100, Math.floor(100 * (t.up.shown || t.up.have || 0) / t.blob.size));
+const upShort = t => t.up.done ? "up" : t.up.dead ? "!" : upPct(t) + "%";
+const upLine = t => t.up.done ? "Uploaded (" + mbs(t.blob.size) + ")" : t.up.dead ? "Couldn't upload: " + t.up.err :
+  t.up.err ? "Waiting for the desk (" + t.up.err + "): it carries on by itself." : "Uploading: " + upPct(t) + "% of " + mbs(t.blob.size);
+
+function recOpen() {
+  const box = $("native-upload");
+  if (!REC || REC.sent) REC = { takes: [], speed: 1, job: null, reg: Promise.resolve(), facing: "user", idea: box ? box.dataset.idea || "" : "",
+    script: box ? box.dataset.script || "" : "", notes: "", rate: 38, size: 24, acc: 0 };
+  if (!$("rec")) {
+    const r = el("div", { id: "rec" });
+    r.innerHTML = "<video id='recview' autoplay muted playsinline></video><div id='recprompt'></div>" +
+      "<div id='rectop'><button type='button' id='recclose'>Close</button><span id='recclock'></span><button type='button' id='recflip'>Flip</button></div>" +
+      "<div id='recbar'><div id='rectakes'></div><div id='recctl'><span><button type='button' id='recscript'>Script</button></span>" +
+      "<button type='button' id='recgo' aria-label='Record'></button><span><button type='button' id='recnext'>Next</button></span></div></div>" +
+      "<div id='recsheet'></div><div id='recreview'></div>";
+    document.body.append(r);
+    $("recclose").onclick = recClose;
+    $("recflip").onclick = () => { if (!REC.mr) { REC.facing = REC.facing === "user" ? "environment" : "user"; recCamera(); } };
+    $("recgo").onclick = () => (REC.mr ? recStop() : recStart());
+    $("recnext").onclick = () => recReview(true);
+    $("recscript").onclick = recSheet;
+    $("recprompt").onclick = () => { if (REC.mr) REC.rolling = !REC.rolling; };  // tap the script to pause it; drag to move it
+  }
+  document.body.style.overflow = "hidden";
+  $("rec").style.display = "block"; $("recreview").style.display = "none"; $("recsheet").style.display = "none";
+  recPrompt(); recTakes(); recCamera();
+  if (!RECLOOP) { RECLOOP = true; requestAnimationFrame(recRoll); }
+}
+function recClose() {
+  if (REC.mr) recStop();
+  if (REC.stream) { REC.stream.getTracks().forEach(t => t.stop()); REC.stream = null; }
+  $("rec").style.display = "none"; document.body.style.overflow = "";
+  const box = $("native-upload"); if (box) { box.dataset.mounted = ""; mountUploader(); }
+}
+function recRoll(ts) {  // the script scrolls at its own pace while you film
+  if (!REC || $("rec").style.display === "none") { RECLOOP = false; return; }
+  if (REC.rolling && REC.last) {
+    REC.acc += REC.rate * Math.min(100, ts - REC.last) / 1000;
+    const whole = Math.floor(REC.acc);
+    if (whole) { $("recprompt").scrollTop += whole; REC.acc -= whole; }
+  }
+  REC.last = ts;
+  requestAnimationFrame(recRoll);
+}
+function recPrompt() {
+  const p = $("recprompt"), lines = REC.script.split("\n").map(x => x.trim()).filter(Boolean);
+  p.innerHTML = ""; lines.forEach(x => p.append(el("p", {}, x)));
+  p.style.display = lines.length && !REC.hide ? "block" : "none"; p.style.fontSize = REC.size + "px";
+}
+function recSheet() {  // the script: paste your own, or the idea's; its scroll speed and size
+  const s = $("recsheet"); s.innerHTML = ""; s.style.display = "block";
+  const ta = el("textarea", { placeholder: "Paste or type what you want to say (optional). It scrolls near the camera while you film." });
+  ta.value = REC.script;
+  const rate = el("input", { type: "range", min: 10, max: 120, step: 2, value: REC.rate }), size = el("input", { type: "range", min: 18, max: 40, step: 1, value: REC.size });
+  rate.style.width = size.style.width = "100%";
+  const show = el("label", {}), cb = el("input", { type: "checkbox" }); cb.checked = !REC.hide; show.append(cb, " Show it while filming");
+  s.append(el("h3", {}, "Script"), ta, el("div", { className: "rsmall" }, "Scroll speed: it starts with each take. Tap the script to pause it, drag to move it."),
+    rate, el("div", { className: "rsmall" }, "Text size"), size, el("p", {}, show),
+    btn("Done", () => { REC.script = ta.value; REC.rate = +rate.value; REC.size = +size.value; REC.hide = !cb.checked; s.style.display = "none"; recPrompt(); }));
+}
+async function recCamera() {
+  try {
+    if (REC.stream) REC.stream.getTracks().forEach(t => t.stop());
+    REC.stream = null;
+    REC.stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: REC.facing, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30, max: 30 } },
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });  // his own voice: the desk cleans it up
+    const v = $("recview"); v.srcObject = REC.stream; v.style.transform = REC.facing === "user" ? "scaleX(-1)" : "";
+    await v.play().catch(() => {});
+    $("recclock").textContent = "";
+  } catch (e) {
+    $("recclock").textContent = e.name === "NotAllowedError" ? "Allow the camera and microphone for this site" : "No camera: " + e.message;
+  }
+}
+function recStart() {
+  if (!REC.stream) { recCamera(); return; }
+  const type = RECMIME.find(t => MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) || "", chunks = [], v = $("recview");
+  let mr;
+  try {  // about 4.5 Mbit/s: a third of what a phone camera writes at 1080p, still sharp for a talking head
+    mr = new MediaRecorder(REC.stream, Object.assign({ videoBitsPerSecond: 4500000, audioBitsPerSecond: 128000 }, type ? { mimeType: type } : {}));
+  } catch (e) { $("recclock").textContent = "This browser can't record: " + e.message; return; }
+  const t0 = Date.now(), w = v.videoWidth, h = v.videoHeight;
+  mr.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  mr.onstop = () => {
+    const blob = new Blob(chunks, { type: (mr.mimeType || type || "video/webm").split(";")[0] });
+    if (blob.size > 2048) recAdd({ blob, name: "take" + (/mp4/.test(blob.type) ? ".mp4" : ".webm"), dur: (Date.now() - t0) / 1000, w, h });
+  };
+  mr.start(1000);
+  REC.mr = mr; REC.rolling = !!REC.script.trim() && !REC.hide; REC.acc = 0;
+  $("rec").classList.add("on");
+  const tick = () => { if (REC.mr === mr) { $("recclock").textContent = clock((Date.now() - t0) / 1000); setTimeout(tick, 250); } };
+  tick();
+  if (navigator.wakeLock) navigator.wakeLock.request("screen").then(l => { REC.lock = l; }).catch(() => {});
+}
+function recStop() {
+  if (!REC.mr) return;
+  const mr = REC.mr; REC.mr = null; REC.rolling = false;
+  try { mr.stop(); } catch (e) {}
+  $("rec").classList.remove("on"); $("recclock").textContent = "";
+  if (REC.lock) { REC.lock.release().catch(() => {}); REC.lock = null; }
+}
+function recAdd(t) {
+  Object.assign(t, { url: URL.createObjectURL(t.blob), rot: 0, a: 0, b: null, fill: false, key: "rec|" + Date.now() + "|" + t.blob.size, up: { have: 0, t: null } });
+  REC.takes.push(t);
+  recTakes(); recUploads();
+}
+function recFile(f) {  // a clip from the phone's gallery joins the takes (a sideways one can be turned or cropped)
+  const v = document.createElement("video"), url = URL.createObjectURL(f);
+  const add = (d, w, h) => { URL.revokeObjectURL(url); recAdd({ blob: f, name: f.name, dur: d, w, h }); recReview(true); };
+  v.preload = "metadata"; v.muted = true;
+  v.onloadedmetadata = () => add(isFinite(v.duration) ? v.duration : 0, v.videoWidth, v.videoHeight);
+  v.onerror = () => add(0, 0, 0);
+  v.src = url;
+}
+function recEnsure(t) {  // one /up/new at a time: the first take makes the job, the rest join it
+  const me = REC;
+  me.reg = me.reg.then(async () => {
+    if (t.up.t != null) return;
+    const j = await call("/up/new", { method: "POST", json: Object.assign({ name: t.name, size: t.blob.size, type: t.blob.type, piece: PIECE, key: t.key },
+      me.job ? { job: me.job } : { recording: 1, idea: me.idea }) });
+    me.job = j.id; t.up.t = j.t; t.up.missing = j.missing; t.up.err = "";
+  }).catch(e => { t.up.err = e.message; });
+  return me.reg;
+}
+async function recUploads() {  // the takes go up one after another, in the background, while you film
+  const me = REC;
+  if (!me || me.busy) return;
+  me.busy = true;
+  let lock = null, fails = 0;
+  try { lock = await navigator.wakeLock.request("screen"); } catch (e) {}
+  try {
+    for (;;) {
+      const t = me.takes.find(x => !x.gone && !x.up.done && !x.up.dead);
+      if (!t) break;
+      try {
+        await recEnsure(t);
+        if (t.up.t == null) throw new Error(t.up.err || "no connection to the desk");
+        await recPush(me.job, t);
+        await call("/up/done?id=" + encodeURIComponent(me.job) + "&t=" + t.up.t, { method: "POST", json: {} });
+        t.up.done = true; t.up.err = ""; fails = 0;
+      } catch (e) {
+        t.up.err = e.message; report("recorder, take: " + e.message);
+        if (/already gone to Claude|no recording with that id|no such take/.test(e.message)) t.up.dead = true;
+        recTakes();
+        if (!t.up.dead) await sleep(Math.min(30000, 2000 * 2 ** Math.min(++fails, 4)));
+      }
+      recTakes();
+    }
+  } finally { me.busy = false; if (lock) lock.release().catch(() => {}); recTakes(); }
+}
+async function recPush(id, t) {  // like push(), for one take: the missing pieces, LANES at a time, in any order
+  const f = t.blob, queue = [...(t.up.missing || [])], flying = new Map();
+  t.up.have = f.size - queue.reduce((n, k) => n + Math.min(PIECE, f.size - k * PIECE), 0);
+  let fails = 0, stop = null;
+  const show = () => { t.up.shown = t.up.have + [...flying.values()].reduce((a, b) => a + b, 0); recTakes(true); };
+  const lane = async () => {
+    while (queue.length && !stop) {
+      const k = queue.shift(), at = k * PIECE, blob = f.slice(at, Math.min(f.size, at + PIECE));
+      try {
+        await piece(id, at, blob, n => { flying.set(k, n); show(); }, t.up.t);
+        flying.delete(k); t.up.have += blob.size; show();
+      } catch (e) {
+        flying.delete(k); queue.push(k);
+        if (++fails > 12) { stop = e; break; }
+        await sleep(Math.min(20000, 1000 * 2 ** Math.min(fails, 4)));
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(LANES, queue.length || 1) }, lane));
+  t.up.missing = queue;
+  if (stop) throw stop;
+}
+function recTakes(soon) {  // the strip of takes on the camera, and each take's upload line on the review
+  if (!REC || !$("rectakes")) return;
+  if (soon && Date.now() - (REC.painted || 0) < 250) return;
+  REC.painted = Date.now();
+  const box = $("rectakes"), list = REC.takes.filter(t => !t.gone);
+  box.innerHTML = "";
+  list.forEach((t, i) => box.append(btn((i + 1) + " · " + clock(t.dur || 0) + " · " + upShort(t), () => recReview(true))));
+  document.querySelectorAll("[data-take]").forEach(s => { const t = REC.takes[+s.dataset.take]; if (t) s.textContent = upLine(t); });
+}
+function recReview(show) {
+  const r = $("recreview");
+  if (!show) { r.style.display = "none"; return; }
+  if (REC.mr) recStop();
+  r.innerHTML = ""; r.style.display = "block";
+  const list = REC.takes.filter(t => !t.gone);
+  const top = el("div", { className: "row" }), add = el("input", { type: "file", accept: "video/*", multiple: true });
+  add.style.display = "none"; add.onchange = () => [...add.files].forEach(recFile);
+  top.append(btn("Film another take", () => recReview(false)), btn("Add a clip from this phone", () => add.click()), add);
+  r.append(el("h3", {}, list.length ? "Your takes, in order" : "No takes yet"), top);
+  list.forEach((t, i) => r.append(recCard(t, i, list)));
+  const sp = el("p", { className: "chips" });
+  sp.append("Speed ");
+  SPEEDS.forEach(s => {
+    const b = btn(s + "x", () => {
+      REC.speed = s; sp.querySelectorAll("button").forEach(x => x.classList.toggle("sel", x === b));
+      r.querySelectorAll("video").forEach(v => { v.playbackRate = s; v.preservesPitch = true; });
+    });
+    b.classList.toggle("sel", REC.speed === s); sp.append(b);
+  });
+  const pk = tplPicker(REC.look || "", x => { REC.look = x; });
+  const notes = el("textarea", { placeholder: "Anything to fix or add? (optional) E.g. show the offer letter when I say $60,000." });
+  notes.value = REC.notes; notes.oninput = () => { REC.notes = notes.value; };
+  const msg = el("p", { className: "rsmall" }), send = btn("Send to Claude", () => recSend(send, msg));
+  send.className = "send"; send.disabled = !list.length;
+  r.append(sp, el("div", { className: "rsmall" }, "1x is as filmed. A speed-up keeps your voice's pitch: preview it here, the desk applies it at full quality."),
+    ...(pk ? [el("p", { className: "rsmall" }, "The look: your house style (Hairline) unless you pick another."), pk.el] : []), notes, send, msg);
+}
+function recCard(t, i, list) {
+  const c = el("div", { className: "take" }), k = REC.takes.indexOf(t);
+  const view = el("div", { className: "takeview" }), v = el("video", { src: t.url, preload: "metadata" });
+  v.playsInline = true; v.setAttribute("playsinline", ""); view.append(v);
+  const st = el("div", { className: "rsmall" }); st.dataset.take = k; st.textContent = upLine(t);
+  const a = el("input", { type: "range", min: 0, step: 0.1 }), b = el("input", { type: "range", min: 0, step: 0.1 });
+  const keep = el("div", { className: "rsmall" }), trim = el("div");
+  const end = () => (t.b == null ? t.dur : t.b), seek = x => { try { v.currentTime = x; } catch (e) {} };
+  const sync = () => {
+    trim.style.display = t.dur > 1 ? "" : "none";
+    if (!(t.dur > 1)) return;
+    a.max = b.max = t.dur.toFixed(1); a.value = t.a; b.value = end();
+    const s = end() - t.a;
+    keep.textContent = "Keeps " + clock(t.a) + " to " + clock(end()) + " (" + s.toFixed(1) + " s" + (REC.speed > 1 ? ", " + (s / REC.speed).toFixed(1) + " s at " + REC.speed + "x" : "") + ")";
+  };
+  a.oninput = () => { t.a = Math.max(0, Math.min(+a.value, end() - 0.5)); seek(t.a); sync(); };
+  b.oninput = () => { const x = Math.min(t.dur, Math.max(+b.value, t.a + 0.5)); t.b = x >= t.dur - 0.05 ? null : x; seek(x); sync(); };
+  const fill = el("label", { className: "rsmall" }), fc = el("input", { type: "checkbox" });
+  fc.checked = t.fill; fill.append(fc, " Fill the frame (crops the sides of a sideways clip)");
+  const look = () => {
+    const wide = t.rot % 180 ? t.h > t.w : t.w > t.h, W = t.rot % 180 ? t.h : t.w, H = t.rot % 180 ? t.w : t.h;
+    fill.style.display = wide ? "" : "none";
+    if (!wide) t.fill = false;
+    const x = wide && t.fill && W ? (1 - H * 9 / 16 / W) / 2 * 100 : 0;
+    v.style.clipPath = x > 0 ? (t.rot % 180 ? "inset(" + x + "% 0 " + x + "% 0)" : "inset(0 " + x + "% 0 " + x + "%)") : "none";
+    v.style.transform = "rotate(" + t.rot + "deg)";
+  };
+  fc.onchange = () => { t.fill = fc.checked; look(); };
+  v.onloadedmetadata = () => {
+    if (isFinite(v.duration) && v.duration > 0) t.dur = v.duration;
+    if (!t.w) { t.w = v.videoWidth; t.h = v.videoHeight; }
+    v.playbackRate = REC.speed; v.preservesPitch = true; sync(); look(); seek(t.a + 0.05);
+  };
+  v.ontimeupdate = () => { if (!v.paused && v.currentTime >= end()) v.pause(); };
+  view.onclick = () => {
+    if (!v.paused) { v.pause(); return; }
+    if (v.currentTime < t.a || v.currentTime >= end() - 0.1) seek(t.a);
+    v.playbackRate = REC.speed; v.play().catch(() => {});
+  };
+  const row = el("div", { className: "row" });
+  row.append(btn("Turn left", () => { t.rot = (t.rot + 270) % 360; look(); }), btn("Turn right", () => { t.rot = (t.rot + 90) % 360; look(); }));
+  if (i > 0) row.append(btn("Move up", () => { const j = REC.takes.indexOf(list[i - 1]); REC.takes[j] = t; REC.takes[k] = list[i - 1]; recReview(true); recTakes(); }));
+  row.append(btn("Delete", () => { if (confirm("Delete take " + (i + 1) + "?")) { t.gone = true; v.pause(); recReview(true); recTakes(); } }));
+  trim.append(el("div", { className: "rsmall" }, "Start"), a, el("div", { className: "rsmall" }, "End"), b, keep);
+  c.append(el("b", {}, "Take " + (i + 1)), st, view, el("div", { className: "rsmall" }, "Tap the video to play it at your speed. Drag to trim:"), trim, fill, row);
+  sync(); look();
+  return c;
+}
+async function recSend(b, msg) {
+  const keep = REC.takes.filter(t => !t.gone && !t.up.dead);
+  if (!keep.length) { msg.textContent = "Film a take first."; return; }
+  b.disabled = true; msg.textContent = "Sending...";
+  try {
+    for (const t of keep) { await recEnsure(t); if (t.up.t == null) throw new Error(t.up.err || "no connection to the desk"); }
+    await call("/up/send?id=" + encodeURIComponent(REC.job), { method: "POST", json: { notes: REC.notes, speed: REC.speed, template: REC.look || "",
+      takes: keep.map(t => ({ t: t.up.t, in: +t.a.toFixed(2), out: t.b == null ? null : +t.b.toFixed(2), rotate: t.rot, fill: t.fill })) } });
+    REC.sent = true;
+    const left = keep.filter(t => !t.up.done).length, id = REC.job;
+    msg.textContent = left ? "Sent. The edit starts once the last " + (left > 1 ? left + " takes are" : "take is") + " up: keep this page open until then." : "Sent.";
+    recUploads();
+    setTimeout(() => { recClose(); live(id); }, 1500);
+  } catch (e) {
+    report("recorder send: " + e.message);
+    b.disabled = false; msg.textContent = "That didn't send (" + e.message + "). Try again.";
+  }
+}
+
+// ---- open: with the key this device remembered, or ask for the passphrase
+(async () => {
+  if (!window.crypto || !crypto.subtle || !window.DecompressionStream) { showLock("This browser is too old to open the desk."); return; }
+  const k = store("get");
+  if (!k) { showLock(); return; }
+  try { KEY = await crypto.subtle.importKey("raw", unhex(k), "AES-GCM", false, ["decrypt"]); await load(); start(); }
+  catch (e) { KEY = null; if (e.name === "OperationError") store("del"); showLock(e.name === "OperationError" ? "" : e.message); }
+})();
+</script></body></html>
